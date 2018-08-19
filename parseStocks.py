@@ -17,14 +17,14 @@
     sorted from least to most dividend yield.
 [5a]. Set a cut-off for the getGuide(div, >cutoff<) such that stocks are excluded if the optimal holding is less than a certain percentage;
     e.g. all stocks that have an optimal holding of less than 0.1%.
-
 """
 
 import os
+import glob
 
 from bs4 import BeautifulSoup
 import pandas as pd
-from xlsxwriter.utility import xl_rowcol_to_cell
+# from xlsxwriter.utility import xl_rowcol_to_cell
 
 
 class Stocks(object):
@@ -99,9 +99,12 @@ class Stocks(object):
             raise NameError(msg)
 
     def writeStocks(self):
-        # writer = pd.ExcelWriter(self.path)
+        ## Write to test.csv
+        # self.data.to_csv('test.csv')
+
+        # Write to test.xlsx
         try:
-            writer = pd.ExcelWriter('test.xlsx', engine='xlsxwriter')
+            writer = pd.ExcelWriter('test.xlsx')# engine='xlsxwriter')
             self.data.to_excel(writer, 'Sheet1')
             writer.save()
         except PermissionError:
@@ -109,21 +112,23 @@ class Stocks(object):
             raise PermissionError(msg)
 
     def writeGuide(self):
+        ## Write to guide.csv
+        # self.guide.to_csv('guide.csv')
+
+        # Write to guide.xlsx
         try:
-            writer = pd.ExcelWriter('guide.xlsx', engine='xlsxwriter')
+            writer = pd.ExcelWriter('guide.xlsx')#, engine='xlsxwriter')
             self.guide.to_excel(writer, 'Sheet1')
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
-
             writer.save()
-        except PermissionError:
+        except IOError:
             msg = 'Please close {}. The program is trying to write to it.'.format('test.xlsx')
-            raise PermissionError(msg)
+            raise IOError(msg)
 
     def getGuide(self, div):
         self.guide = self.data[self.data[self.colDY] < div]
         weightedMarketCapLowDiv = self.guide['Weighted Market Capitalization'].sum()
-        print(weightedMarketCapLowDiv)
         self.guide['Optimal Holding %'] = self.guide['Weighted Market Capitalization'] / weightedMarketCapLowDiv * 100
         self.guide['Average Dividend Yield %'] = (self.guide['Optimal Holding %'] * self.guide[self.colDY]).sum() / 100
         self.writeGuide()
@@ -133,9 +138,12 @@ def main():
     pd.set_option('display.expand_frame_repr', False)
 
     path = r"E:\Daniel\Downloads"
+    path= r"/home/daniet4/"
     fName = r"sp500 data.xls"
+    fName = glob.glob('*.xls')[0]
+
     fullPath = os.path.join(path, fName)
-    div = 1
+    div = 0.1
 
     stocks = Stocks(fullPath, div)
     return stocks
