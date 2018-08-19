@@ -17,14 +17,14 @@ import win32com.client as win32
 
 """
 0. Grab Fidelity Stock Screener data or something similar.
-1. [DONE] Parse it and convert $X.XXB [str] - > X.XXe9 [float].
-2. [DONE] Sort by dividend yield.
-3. [DONE] Determine market capitalization percentage.
-4. [DONE-ish] -- Printing to separate file for testing | Print to original file.
-[4a]. Use the xlsxwriter module to improve the .xlsx file formatting. Refer to: http://pbpython.com/improve-pandas-excel-output.html
-[5]. [DONE-ish] -- Add a total dividend yield | Print a separate file that meets a dividend yield goal; e.g. all stocks that have a dividend yield of less than 0.5%
+1.    [DONE] Parse it and convert $X.XXB [str] - > X.XXe9 [float].
+2.    [DONE] Sort by dividend yield.
+3.    [DONE] Determine market capitalization percentage.
+4.    [DONE] Printing to separate file for testing | Print to original file.
+[4a]. [DONE-ish] -- Use the xlsxwriter module to improve the .xlsx file formatting. Refer to: http://pbpython.com/improve-pandas-excel-output.html
+[5].  [DONE] -- Add a total dividend yield | Print a separate file that meets a dividend yield goal; e.g. all stocks that have a dividend yield of less than 0.5%
     sorted from least to most dividend yield.
-[5a]. Set a cut-off for the getGuide(div, >cutoff<) such that stocks are excluded if the optimal holding is less than a certain percentage;
+[5a]. [DONE] Set a cut-off for the getGuide(div, >cutoff<) such that stocks are excluded if the optimal holding is less than a certain percentage;
     e.g. all stocks that have an optimal holding of less than 0.1%.
 """
 
@@ -59,7 +59,18 @@ class Stocks(object):
     def loadXLSData(self):
         """Read in data from an Excel spreadsheet"""
         self.data = pd.read_excel(self.path)
-        self.data[self.colDY] = self.data[self.colDY].fillna(0) / 100
+
+        try:
+            self.data[self.colDY] = self.data[self.colDY].fillna(0) / 100
+        except KeyError:
+            msg = 'Please make sure that {} contains a {} column'.format(self.path, self.colDY)
+            raise KeyError(msg)
+
+        try:
+            self.data['Price Performance (52 Weeks)'] = self.data['Price Performance (52 Weeks)'] / 100
+        except KeyError:
+            print("No column named 'Price Performance (52 Weeks)' found")
+
         self.deleteData()
         self.str2int()
 
@@ -118,16 +129,29 @@ class Stocks(object):
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
 
-            # Formats
+            ## Formats
+            # Numbers
             centsFormat = workbook.add_format({'num_format': '$0.00'})
             dollarsFormat = workbook.add_format({'num_format': '$#,###,###,###,###'})
             percentFormat = workbook.add_format({'num_format': '0.00%'})
+
+            # Strings
+            headerFormat = workbook.add_format({'bold': True, 'border': 1})
+
+            # Conditional
+            redFormat = workbook.add_format({'bg_color': '#FFC7CE', 'font_color': '#9C0006'})
+            greenFormat = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100'})
 
             # Formatting
             worksheet.set_column('D:G', 1, percentFormat)
             worksheet.set_column('H:H', 1, dollarsFormat)
             worksheet.set_column('I:I', 1, centsFormat)
+            worksheet.write('J1', 'Average Dividend Yield', headerFormat)
+            worksheet.write('J2', self.avgDivYield, percentFormat)
 
+            col = 'F2:F{}'.format(self.data.shape[0])
+            worksheet.conditional_format(col, {'type': 'cell', 'criteria': '<', 'value': 0, 'format': redFormat})
+            worksheet.conditional_format(col, {'type': 'cell', 'criteria': '>', 'value': 0, 'format': greenFormat})
             writer.save()
         except IOError:
             msg = 'Please close {}. The program is trying to write to it.'.format(fName)
@@ -146,7 +170,7 @@ class Stocks(object):
         self.guide = self.data[self.data[self.colDY] < div]
         weightedMarketCapLowDiv = self.guide['Weighted Market Capitalization'].sum()
         self.guide['Optimal Holding %'] = self.guide['Weighted Market Capitalization'] / weightedMarketCapLowDiv
-        self.guide['Average Dividend Yield %'] = (self.guide['Optimal Holding %'] * self.guide[self.colDY]).sum() / 100
+        self.avgDivYield = (self.guide['Optimal Holding %'] * self.guide[self.colDY]).sum()
         fName = self.writeGuide()
         self.formatExcel(fName)
 
@@ -157,7 +181,7 @@ def main():
     # fName = glob.glob('sp.xls')[0]
     fName = 'sp500_data.xlsx'
     fullPath = os.path.join(path, fName)
-    div = 1
+    div = 0.01
 
     stocks = Stocks(fullPath, div)
     return stocks
